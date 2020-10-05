@@ -1,0 +1,79 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Alberto Maximiliano Millán Prado"
+date: "4/10/2020"
+output: html_document
+---
+# Downloading train & test data
+```{r setup, include=FALSE}
+library(caret)
+library(randomForest)
+set.seed(123)
+temp <- tempfile()
+temp2 <- tempfile()
+train_url<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(train_url,temp)
+train <- read.csv(temp,na.strings=c("NA","#DIV/0!",""))
+unlink(temp)
+
+download.file(test_url,temp2)
+test <- read.csv(temp2,na.strings=c("NA","#DIV/0!",""))
+unlink(temp2)
+summary(train)
+```
+
+# Data Cleaning
+```{r}
+train <-train[,colSums(is.na(train)) == 0][-c(1:7)]
+test <-test[,colSums(is.na(test)) == 0][-c(1:7)]
+#remove near zero variance variables
+i <- nearZeroVar(train, saveMetrics=TRUE)
+train <- train[,i$nzv==FALSE]
+```
+
+And we will partioning the training set into two sets
+```{r}
+inTrain <- createDataPartition(train$classe, p=0.6, list=FALSE)
+tra <- train[inTrain, ]
+val <- train[-inTrain, ]
+```
+
+# Random Forest
+```{r}
+rand.for.mod <- randomForest(classe~.,data = tra,method ="class")
+pred.rf <- predict(rand.for.mod,val,type = "class")
+```
+
+#Generalized Boosted Regression
+```{r}
+gbm.mod <- train(classe ~ ., data=tra, method = "gbm",
+                 trControl = trainControl(method = "repeatedcv",
+                           number = 5,
+                           repeats = 1),
+                 verbose = FALSE)
+
+gbmPredTest <- predict(gbm.mod, newdata=val)
+```
+
+
+## Predicting Results on the Test Data
+```{r echo=FALSE}
+print("random forest accuracy")
+rfAccuracyTest <- confusionMatrix(pred.rf,val$classe)
+rfAccuracyTest
+print("gbm accuracy")
+gbmAccuracyTest <- confusionMatrix(gbmPredTest, val$classe)
+gbmAccuracyTest
+```
+
+Random Forests gave an Accuracy  of 99.89%, so thats the model we will choose to predict de test data.
+```{r}
+predictSubmission <- predict(rand.for.mod, test)
+predictSubmission
+```
+
+
+
+
